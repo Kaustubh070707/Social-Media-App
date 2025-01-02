@@ -5,6 +5,7 @@ const { validateSignupData } = require("./utils/validation");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const { userAuth } = require("./middleware/auth");
 
 require("dotenv").config();
 const PORT = process.env.PORT || 3000;
@@ -41,7 +42,7 @@ app.post("/login", async (req, res) => {
     }
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (isValidPassword) {
-      const token = await jwt.sign({ _id: user._id }, JWT_SECRET);
+      const token = await user.getJWT();
       res.cookie("token", token);
       res.send("Login Successful");
     } else {
@@ -52,52 +53,9 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get("/profile", async (req, res) => {
-  const cookies = req.cookies;
-  const { token } = cookies;
-  if (!token) {
-    res.status(404).send("Invalid token");
-  }
-  const decodedMessage = jwt.verify(token, JWT_SECRET);
-  const user = await User.findById({ _id: decodedMessage._id });
-  if (!user) {
-    res.status(404).send("Invalid user");
-  }
-  res.send("Ok");
-});
-
-app.get("/user", async (req, res) => {
-  try {
-    const users = await User.find({ emailId: req.body.emailId });
-    if (users.length === 0) {
-      res.status(404).send("User not found");
-    } else {
-      res.send(users);
-    }
-  } catch (err) {
-    res.status(400).send(err.message);
-  }
-});
-
-app.patch("/user", async (req, res) => {
-  const userId = req.body.userId;
-  const data = req.body;
-
-  const ALLOWED_UPDATES = ["photoUrl", "gender", "age"];
-  const isAllowedUpdate = Object.keys(data).every((k) => {
-    ALLOWED_UPDATES.includes(k);
-  });
-  if (!isAllowedUpdate) {
-    res.status(400).send("Update not allowed");
-  }
-  try {
-    const user = await User.findByIdAndUpdate({ _id: userId }, data, {
-      returnDocument: "after",
-      runValidators: true,
-    });
-  } catch (err) {
-    res.status(400).send("Updata Failed " + err.message);
-  }
+app.get("/profile", userAuth, async (req, res) => {
+  const user = req.user;
+  res.send(user);
 });
 
 connectDB()
